@@ -1,0 +1,58 @@
+GeSiM Nano-Plotter NPC2.15.46 Multitask used for Dr. Lara Mahal Lectin microarray fabrication application which was developed and maintained by Richard Rouse, HTS Resources, LLC. 
+
+Multitask is a Nano-Plotter language (NPL) script which is based on pascal is can be compiled using the instruments programming environment IDE. This is an XML formatted transferlist.
+
+This script uploads XML formed transferlists that contain commands for robotic operation of this piezoelectric based computer numeric control (CNC) instrumentation.  The structure of this command is as followed
+
+<DAF>0.200000</DAF><DAV>3.000000</DAV><DADT>1.000000</DADT><DADDT>0.000000</DADDT><DADBDT>0.100000</DADBDT>
+<DAPZ>false</DAPZ><DAPZV>100</DAPZV><DAPZP>50</DAPZP><DAPZF>100</DAPZF>
+<DSDT>0.500000</DSDT><DSCHC>4</DSCHC><DSBTDT>0.100000</DSBTDT><DSCV>15.000000</DSCV>
+<DZOFF>0.500000</DZOFF><DZMOFF>0.000000</DZMOFF>
+<DWDT>30.000000</DWDT><DDT>0.100000</DDT><DEWV>0.000000</DEWV><DEWF>0.500000</DEWF><DEPZ>false</DEPZ><DEWW>extrawash</DEWW>
+<A>1</A><TL>1</TL><P>MTP_Sys</P><B>1</B><SR>1</SR><SC>1</SC>
+<D>1</D><ST>2</ST><A>4</A><B>1</B><TL>1</TL><G>1</G><TBR>1</TBR><TER>1</TER><TBC>3</TBC><TEC>1</TEC><BBR>1</BBR><BER>1</BER><BBC>2</BBC><BEC>1</BEC><CBR>1</CBR><CER>1</CER><CBC>3</CBC><CEC>1</CEC>
+
+The first 5 lines are default variables. The 6th line is an aspiration command and the 7th is a dispensing command.
+
+The relevant variables (for this application) are listed:
+
+DAF - default aspiration flow rate
+DAV - default aspiration volume
+DADT - default delay time after aspiration
+DADDT - default after aspiration dry time
+DADBDT - default before aspiration dry time
+DAPZ - default turn piezo on during aspiration
+DAPZV - default piezo volt setting during aspiration
+DAPZP - default piezo pulse setting during aspiration
+DAPZF - default piezo frequency setting during aspiration
+DZOFF - default z height from surface
+DZMOFF - default z height move from surface
+DWDT - default wash time
+DDT - default dry time
+DEWV - default extra wash volume
+DEWF - default extra wash flow rate
+DEPZ - default turn piezo on during extra wash
+DEWW - default extra wash reservoir
+D - drop number
+ST - spot type - 1 absolute coordinates with multiple target groups having a single target row and column, 2 array blocks and spots, 3 absolute coordinates with single target groups and multiple target rows and columns, 4 points defined within targets within a single target group with multiple target rows and columns	
+A - function type - 1 wash, aspiration, strobcheck; 2 aspiration, strobcheck; 3  strobcheck; 4 spot; 5 wash and strobcheck
+TL - tip list (determines with tips to turn on or off)
+G - target group
+TBC - target begin column
+TEC - target end column 
+TBR - target begin row
+TER - target end column 
+BBC - block begin column
+BEC - block end column 
+BBR - block begin row
+BER - block end column 
+CBR - spot begin row
+CER - spot end row 
+CBC - spot begin column 
+CEC - spot end column
+
+More general commands are posted here:
+http://www.htsresources.com/multitaskdocs/commands.php
+
+
+

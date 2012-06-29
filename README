@@ -1,4 +1,4 @@
-GeSiM Nano-Plotter NPC2.15.46 Multitask used for Dr. Lara Mahal Lectin microarray fabrication application which was developed and maintained by Richard Rouse, HTS Resources, LLC. 
+GeSiM Nano-Plotter NPC2.15.46 Multitask used for microarray fabrication application which was developed and maintained by Richard Rouse, HTS Resources, LLC. 
 
 Multitask is a Nano-Plotter language (NPL) script which is based on pascal is can be compiled using the instruments programming environment IDE. This is an XML formatted transferlist.
 

@@ -1,0 +1,1470 @@
+program MultiTask;
+
+#include "../HTSLib/Wash.inc"
+#include "../HTSLib/AirGapAspiration021413.inc"
+#include "../HTSLib/Aspiration010311.inc"
+//#include "../HTSLib/StrobCheckMath081910.inc"
+#include "../HTSLib/StrobCheckMath081910_test.inc"
+#include "../HTSLib/ParserXML051111.inc"
+#include "../HTSLib/ShakerPlate.inc"
+#include "../HTSLib/FindWell.inc"
+#include "../HTSLib/DriveOption010411.inc"
+#include "../HTSLib/DriveArray012210.inc"
+//#include "../HTSLib/QuantSpot081910.inc"
+#include "../HTSLib/QuantSpotXY011211.inc"
+
+
+
+//const TPLT = 1024;
+
+///////RECORDS////////////////////
+
+type tTipData=
+    record
+        tpl:array[1..16] of boolean;
+        tplist,pos:array[1..16] of integer;
+        chkcount:integer;
+        volt,pulse:array[1..16] of real;
+        frequency,drop:array[1..16] of integer;
+        maxtip:integer;
+        serial:array[1..16] of string;
+    end;
+
+/////////////////FUNCTIONS//////////////////////
+//_______________________________________________________________//
+//PYTHON COMMAND FIX 
+function pythoncmd(drnamer:string):file;
+var pyFile:file;
+begin
+    TimerDelay(3);
+    Exec(drnamer);
+    TimerDelay(3);
+    pyFile = OpenR('dirfile.txt');
+    pythoncmd =  pyFile;
+end;
+
+//_______________________________________________________________//
+//PYTHON PATH FIX
+function pythonpath(pointfilename:string):tTransParse;
+
+var drnamer,line:string;
+    pyFile:file;
+    tTP:tTransParse;
+ 
+begin
+  drnamer = 'python filenameparser.py ' + pointfilename;
+  pyFile = pythoncmd(drnamer);
+  line = Getln( f=pyFile);
+  if StringLength( s=line) > 6 then begin
+     tTP = ParserXML(line);  
+     if FileState(pyFile) > -1 then Close(pyFile);
+  end;
+  else begin
+    pyFile = pythoncmd(drnamer);
+    line = Getln( f=pyFile);
+    if StringLength( s=line) > 6 then begin
+     tTP = ParserXML(line);  
+     if FileState(pyFile) > -1 then Close(pyFile);
+    end;
+  end;
+  
+ pythonpath = tTP;
+
+end;
+
+
+
+//_______________________________________________________________//
+function WorkPlateObjects(trackfilename:string,datadir:string):void;
+
+var ftar:array[1..1000] of integer;
+    i,a,j:integer;
+    targp,targprows,targpcols,blrows,blcols,sprows,spcols:array[1..1000] of integer;
+    targpid:integer;
+    tarid:integer;
+    topmarg,leftmarg:array[1..1000] of real;
+    datstr,datstrx,datstry:string;
+    tfile:file;
+    wkpltfile:string;
+    fx,sx,fy,sy,bx,by,blxd,blyd:real;
+    x,blx,y,bly:string;
+    k,l:integer;
+
+begin
+
+ i=1;
+ ftar[i]=GetFirstObject();
+ Writeln(ftar[i]);
+
+ while GetNextObject( ) > -1 do begin
+    i = i+1;
+    ftar[i] = ftar[1] + (i-1);
+    Writeln(ftar[i]); 
+ end;
+
+ targpid=0;
+ for j=1 to i do begin
+   if GetKind( object=ftar[j]) == 2 then begin
+     targpid = targpid + 1;
+     targp[targpid] = ftar[j];
+   end;
+ end;
+
+ tfile=OpenRW( filename=datadir + "/" + trackfilename, , append=true);
+
+ for j=1 to targpid do begin
+   //This figures out the center-to-center x and center-to-center y
+
+   tarid=GetTargetId( target_group_id=targp[j], row=1, column=1);
+      
+   fx = GetX( object=tarid, column=1, blockRow=1, blockCol=1);
+   sx = GetX( object=tarid, column=2, blockRow=1, blockCol=1);
+   bx = GetX( object=tarid, column=1, blockRow=1, blockCol=2);
+   x = StringOf((sx - fx):0:3);
+   blx = StringOf((bx - fx):0:3);
+
+   fy = GetY( object=tarid, row=1, blockRow=1, blockCol=1);
+   sy = GetY( object=tarid, row=2, blockRow=1, blockCol=1);
+   by = GetY( object=tarid, row=1, blockRow=2, blockCol=1);
+   y = StringOf((fy - sy):0:3);
+   bly = StringOf((sy - by):0:3);
+
+
+   targprows[j]=GetRows( object=targp[j]);  
+   datstr = "<TR>"+targprows[j]+"</TR>";
+   targpcols[j]=GetColumns( object=targp[j]);
+   datstr = datstr + "<TNM>"+GetName( object=targp[j])+"</TNM>";
+   datstr = datstr + "<TC>"+targpcols[j]+"</TC>";
+   
+   datstr = datstr + "<IDT>"+targp[j]+"</IDT>";    
+   blrows[j]=GetBlockRows( object=tarid);
+   datstr = datstr + "<BLR>"+blrows[j]+"</BLR>";
+   datstr = datstr + "<BLRS>"+bly+"</BLRS>";
+   blcols[j]=GetBlockColumns( object=tarid);
+   datstr = datstr + "<BLC>"+blcols[j]+"</BLC>";
+   datstr = datstr + "<BLCS>"+blx+"</BLCS>";
+   sprows[j]=GetRows( object=tarid);
+   datstr = datstr + "<SPR>"+sprows[j]+"</SPR>";
+   datstr = datstr + "<SPRS>"+y+"</SPRS>";
+   spcols[j]=GetColumns( object=tarid);
+   datstr = datstr + "<SPC>"+spcols[j]+"</SPC>";
+   datstr = datstr + "<SPCS>"+x+"</SPCS>";
+   leftmarg[j]=GetObjValue( object=tarid, valueIndex=10);
+   datstr = datstr + "<LFT>"+StringOf(leftmarg[j]:0:3)+"</LFT>";
+   topmarg[j]=GetObjValue( object=tarid, valueIndex=9);
+   datstr = datstr + "<ToP>"+StringOf(topmarg[j]:0:3)+"</ToP>";
+   wkpltfile=GetSystemInfo( infoIndex=2 );
+   datstr = datstr + "<WkP>" + wkpltfile + "</WkP>";
+   Putln( f=tfile, s=datstr );
+
+   datstrx = "<BLXDM=" + tarid + ">"; 
+   datstry = "<BLYDM=" + tarid + ">"; 
+   for k=1 to blrows[j] do begin
+    for l=1 to blcols[j] do begin
+        blxd = GetX( object=tarid, column=1, blockRow=k, blockCol=l);
+        blyd = GetY( object=tarid, row=1, blockRow=k, blockCol=l);
+
+        if (k < blrows[j]) or (l < blcols[j]) then begin
+          datstrx = datstrx + StringOf(blxd:0:3) + ",";
+	  datstry = datstry + StringOf(blyd:0:3) + ",";
+        end; 
+        if (k = blrows[j]) and (l = blcols[j]) then begin
+          datstrx = datstrx + StringOf(blxd:0:3);
+	  datstry = datstry + StringOf(blyd:0:3);
+          datstrx = datstrx + "</BLXDM>";    
+          datstry = datstry + "</BLYDM>";    
+        end;
+    end;
+   end;
+   Putln( f=tfile, s=datstrx );
+   Putln( f=tfile, s=datstry );
+ end;
+
+ if FileState(tfile) > -1 then Close(tfile);
+
+
+end;
+
+//_______________________________________________________________//
+
+function tipCode(tip: integer): integer;
+
+var i, res: integer;
+
+begin
+ res=1;
+ for i=1 to tip-1 do begin
+  res=res*2; 
+ end;
+
+ tipCode=res;
+end;
+
+
+//_______________________________________________________________//
+//This function sets the MTP plate just after aspiration
+// It records when aspirations are successful. Red wells indicate failed asirations
+
+function WellState(maxtip:integer,asp:integer,plrow:integer,plcol:integer,tpl:array[1..16] of boolean,s:string):void;
+
+var difx,dify,dx,dy:real;
+    posrow,poscol:integer;
+    tl:integer;
+    tipspace:real;
+    well:string;
+    tipcol:integer;
+    maxx,maxy,spdiv,tx,ty:real;
+
+begin
+
+ maxx = GetTipX( tip=maxtip);
+ maxy = GetTipY( tip=maxtip);
+ 
+ spdiv = 1;
+ if GetColumns( object=GetObjId( name=s))==24 then spdiv = 4.5;
+ if GetColumns( object=GetObjId( name=s))==12 then spdiv = 9;
+ 
+ for tl=1 to maxtip do begin
+
+   tx = GetTipX( tip=tl) - maxx;
+   ty = maxy - GetTipY( tip=tl);
+   poscol = Int(plcol + (tx / spdiv));
+   posrow = Int(plrow + (ty / spdiv)); 
+
+    well = "S" + StringOf(plrow) + "," + StringOf(plcol);
+
+
+   if FindString( sToSearch=s, sToFind="MTP_Sys") > -1 then begin
+        
+    if tpl[tl] == true then begin
+        SetState( object=MTP_Sys, state=2, row=posrow, column=poscol );
+        SetText( object=MTP_Sys, text=well, row=posrow, column=poscol );  
+    end;                                    
+    if tpl[tl] == false then begin
+        if asp = 1 then begin
+            SetState( object=MTP_Sys, state=6, row=posrow, column=poscol );
+            SetText( object=MTP_Sys, text=well, row=posrow, column=poscol );
+        end;                 
+        if asp = 0 then begin
+            SetState( object=MTP_Sys, state=4, row=posrow, column=poscol );
+            SetText( object=MTP_Sys, text=well, row=posrow, column=poscol );
+        end;
+    end;
+   end;
+
+
+ end;
+ end;
+
+//_______________________________________________________________//
+/*
+function returnSample(maxtip:integer,tTP:tTransParse,SCD:array[1..16] of boolean,vol:real,fl:real,allret:boolean,selret:boolean,sr:integer,sc:integer):void;
+
+var i,a,tiplist:integer;
+
+begin
+
+if selret=true then begin
+ for i=1 to maxtip do begin
+  if tTP.tl[i] = 0 and SCD[i] = false then begin
+   a=1;
+   tiplist = tiplist + tipCode(i);
+  end;
+ end;
+end;
+
+if selret=false then begin
+ for i=1 to maxtip do begin
+  if tTP.tl[i] = 1 and SCD[i] = true then begin
+   a=1;
+   tiplist = tiplist + tipCode(i);
+  end;
+ end;
+end;
+
+
+if allret=true then a=1;
+
+ if a=1 then begin
+  PositionAbsoluteZ( z=0);
+  PositionToObject( tip=maxtip, object=MTP_Sys, row=sr, column=sc );
+  PositionAbsoluteZ( z=GetZ( object=MTP_Sys)-2, 10 );
+  PositionAbsoluteZ( z=GetZ( object=MTP_Sys), 3 );
+  if selret=false and allret=true then DiluterDispense( tip_list=[], volume=vol, flow=fl );
+  if selret=true and allret=true then DiluterDispense( tip_list=tiplist, volume=vol, flow=fl );
+  if selret=true and allret=false then DiluterDispense( tip_list=tiplist, volume=vol, flow=fl );
+  PositionAbsoluteZ( z=GetZ( object=MTP_Sys)-2, 3 );
+  PositionAbsoluteZ( z=0, 10 );
+ end;
+
+end;
+*/
+//_______________________________________________________________//
+
+function corFile(corfilename:string,datadir:string,line:string,maxtip:integer,SCD:array[1..16] of boolean,tTP:tTransParse):void;
+
+//Creates correction transfer list
+
+var i:integer;
+    tlstring,astr,bstr:string;
+    cline:string;
+    cfile:file;
+    printline:boolean;
+begin
+
+ tlstring = "<TL>";
+ for i=1 to maxtip do begin
+  if  tTP.tl[i]==1 and SCD[i]==true then begin
+    	if maxtip = 1 then tlstring = tlstring + "0</TL>";
+    	if maxtip > 1 and i < maxtip then tlstring = tlstring + "0,";
+    	if maxtip > 1 and i = maxtip then tlstring = tlstring + "0</TL>";
+  end;
+  if tTP.tl[i]==0 then begin
+    	if maxtip = 1 then tlstring = tlstring + "0</TL>";
+    	if maxtip > 1 and i < maxtip then tlstring = tlstring + "0,";
+    	if maxtip > 1 and i = maxtip then tlstring = tlstring + "0</TL>";
+  end;
+  if tTP.tl[i]==1 and SCD[i]==false then begin
+	printline = true;
+    	if maxtip = 1 then tlstring = tlstring + "1</TL>";
+    	if maxtip > 1 and i < maxtip then tlstring = tlstring + "1,";
+    	if maxtip > 1 and i = maxtip then tlstring = tlstring + "1</TL>";
+  end;
+ end;
+ astr = Substring(s=line, iBeg=0, iEnd=FindString(sToSearch=line, sToFind="<TL>"));
+ bstr = Substring(s=line, iBeg=FindString(sToSearch=line, sToFind="</TL>")+5, iEnd=-1);
+ cline = astr+tlstring+bstr;
+ cfile=OpenRW( filename=datadir + "/" + corfilename, , append=true);
+ if printline = true then Putln( f=cfile, s=cline );
+ if FileState(cfile) > -1 then Close(cfile);
+end;
+
+//_______________________________________________________________//
+
+function CommaCounter(line:string):integer;
+//Function to count number of elenents in an array
+var len,i,count:integer;
+    z:string;
+
+begin
+ count=1;
+ for i=0 to StringLength(line) do begin
+    z=Substring(line,i,i+1);
+    if FindString(sToSearch=z, sToFind=",") > -1 then begin
+        count=count+1;
+    end;
+ end;
+ CommaCounter = count;
+end;
+
+//_______________________________________________________________//
+
+function tipsettings(tTD:tTipData,maxtip:integer,tTP:tTransParse,strobfilename:string,path:string):void;
+
+// Sets pippette tips settings from transfer list
+
+var i:integer;
+    sfile:file;
+    datastring:string;
+    a:integer;
+
+begin
+
+   sfile = OpenRW( filename=path + "/" + strobfilename, , append=true);
+     
+   for i=1 to maxtip do 
+        begin
+            datastring = "<SRL=" + i + ">"+tTD.serial[i]+"</SRL>";
+            //Setting up the pipettes
+            if tTP.volt[i] > 0 then begin
+		a=1;
+                datastring = datastring + "<V=" + i + ">"+StringOf(tTP.volt[i]:0:3)+"</V>";
+                PipetteSetVolt( tip_list=[i], volt=tTP.volt[i]);
+            end;
+            if tTP.freq[i] > 0 then begin
+		a=1;
+                datastring = datastring + "<F=" + i + ">"+StringOf(tTP.freq[i]:0:3)+"</F>";
+                PipetteSetFrequency( tip_list=[i], f=tTP.freq[i]);
+            end;
+            if tTP.pulse[i] > 0 then begin  
+		a=1;
+                datastring = datastring + "<L=" + i + ">"+StringOf(tTD.pulse[i]:0:3)+"</L>";         
+                PipetteSetTPulse( tip_list=[i], t=tTP.pulse[i]);
+            end;
+            if tTP.drop[i] > 0 then begin
+		a=1;
+                datastring = datastring + "<D=" + i + ">"+StringOf(tTD.drop[i]:0:3)+"</D>";
+                PipetteSetDroplets( tip_list=[i], droplets=Int(tTP.drop[i])); 
+            end;  
+            	//if a=1 then Putln( f=sfile, s=datastring );         
+        end;
+    Close(sfile);
+
+end;
+
+
+//_______________________________________________________________//
+
+function selectTipParameters(tTD:tTipData,fFile:file):void;
+// call windo to allow user to change default Tip settings in run-time through a GUI
+
+var serial:array[1..16] of string;
+    i:integer;
+    datastring:string;
+
+begin
+ 
+ for i=1 to tTD.maxtip do begin
+    serial[i] = GetSystemInfo( infoIndex=3, partIndex=i, partInfoIndex=2);
+    Window("Tip " + StringOf(i) + " Settings", "Serial: " + StringOf(serial[i]) + "\nVolt: ", tTD.volt[i],
+           "Pulse: ", tTD.pulse[i],
+           "Frequency: ", tTD.frequency[i]);  
+             
+    datastring = "<TipSettings Serial=" + StringOf(serial[i]) + " Tip=" + StringOf(i) + "><volt>" + StringOf(tTD.volt[i]:0:3) + "</volt><pulse>" + StringOf(tTD.pulse[i]:0:3) + "</pulse><frequency>" + StringOf(tTD.frequency[i]:0:3) + "</frequency></TipSettings>";
+    Putln( f=fFile, s=datastring );
+ end;
+ 
+end;
+
+//________________________________________________________________//
+
+function TipData():tTipData;
+//gets tip settings from initial set up
+var i,val,maxtip:integer;
+    tip:array[1..16] of boolean;
+    tTD:tTipData;
+
+begin
+
+ for i=1 to 16 do begin
+    val = Int(GetSystemValue( infoIndex=1, partIndex=i, partInfoIndex=4));
+    if val > -1 then begin;
+        maxtip = i;
+        tip[i] = true;
+        tTD.volt[i]=GetSystemValue( infoIndex=1, partIndex=i, partInfoIndex=7);
+        tTD.pulse[i]=GetSystemValue( infoIndex=1, partIndex=i, partInfoIndex=9);
+        tTD.frequency[i]=Int(GetSystemValue( infoIndex=1, partIndex=i, partInfoIndex=8));
+       	tTD.serial[i] = GetSystemInfo( infoIndex=3, partIndex=i, partInfoIndex=2);
+       	tTD.pos[i] = Int(GetSystemValue( infoIndex=1, partIndex=i, partInfoIndex=4));
+    end;
+ end;
+ tTD.maxtip = maxtip; 
+ TipData = tTD;  
+end;
+
+//________________________________________________________________//
+
+function StrobCheckDriver(linecount:integer,
+			    maxtip:integer,
+                            drop:integer,
+                            row:integer,
+                            col:integer,
+                            strobfilename:string,
+                            delay:real,
+                            assay:integer,
+                            btdelay:real,
+                            path:string,
+                            tSS:tStrobData,
+                            tpl:array[1..16] of boolean,
+                            tTD:tTipData,
+		 	    tTP:tTransParse,
+                            cv:real,
+                            chkcount:integer):array[1..16] of boolean;
+//runs strobe check before stobe check math function through settings in transfer list
+                         
+var i:integer;  
+    SCD:array[1..16] of boolean;                          
+                            
+begin
+
+ SetVideoSource( source=4);
+ SetLiveVideo( on=true);
+
+ for i=1 to maxtip do begin 
+        if (tpl[i] == true) and (tTP.tl[i] == 1) then begin   
+          Stroboscope(mode = 1, tip = i); 
+          //StrobCheck(tip,drop,chkcount,row,col,filename,delay,assay,betweenstrobdelay,path);
+          tSS=StrobCheck(linecount,i,1,chkcount,row,col,strobfilename,delay,assay,btdelay,path,tTP.anot);          
+
+          if (tSS.ok = true) then begin
+	            if (tSS.coefy < cv) then SCD[i] = true;
+	            else SCD[i] = false;
+          end;
+          if (tSS.ok = false) then begin
+           SCD[i] = false; 
+          end;
+	          if (tSS.coefy > cv) then SCD[i] = false;
+
+         Stroboscope(mode = 0, tip = i); 
+        end;
+ end;
+
+ StrobCheckDriver = SCD;
+
+end;
+
+//________________________________________________________________//
+
+function Driver(
+    tTD:tTipData,
+    maxtargp:integer,
+    targp:array[1..1000] of string,
+    pfile:file,
+    path:string,
+    DateTime:string,
+    zdispoffset:real,
+    maxtip:integer,
+    zmoveoffset:real,
+    tTP:tTransParse,
+    SCD:array[1..16] of boolean,
+    sr:integer,
+    sc:integer,
+    tippos:integer
+    ):void;
+
+//dispensing driver. ADP array, offset array, line, and inidividual points
+
+var i,k,tiplist,tarid,ci,ai,totalcoords,ca:integer;
+    tarname:string;
+    x,y,olinex, oliney, elinex, eliney,center_x_offset:real;
+    imagename,posdata:string;
+    position:tPoint;
+    tr,tc,r,c,mc:integer; //target group rows and columns
+    pti:integer;
+    d,t,DateTimecam,pictname:string;
+    
+begin
+     // Switch to head camera  
+     SetVideoSource( source=1); // Head Camera
+     SetLiveVideo( on=true);
+
+    //Based on the strob data this sets up the tip list
+    tiplist = 0;
+    for i=1 to maxtip do begin
+            if tTP.tl[i] = 1 and SCD[i] = true then begin
+                tiplist = tiplist + tipCode(i);
+            end;
+    end;
+
+    //This modification was done to address sequential spotting mode
+    if tippos > 0 then maxtip = tippos;
+       
+    //Begin dispense moves---------
+    if tiplist > 0 then begin //if tips are still good, start dispensing
+
+     for ca=1 to CommaCounter(tTP.sptypstring) do begin //for 1 to type of spotting in command line
+
+	//Your options....
+
+       if tTP.sptyp[ca] = 1 then begin ///array pattern
+        //Get target locations     
+        for i=1 to maxtargp do begin // for every target group
+            tarname = targp[i]; 
+            tarid = GetTargetId( target_group_id=GetObjId( name=tarname), row=1, column=1); //Here ST deals with only one target per target group
+            x=GetX( object=tarid, column=0 );
+            y=GetY( object=tarid, row=0 ) + GetObjValue( object=tarid, valueIndex=2);            
+            //Save position data
+            posdata = "<Position targetgp=" + tarname + " X=" + StringOf(x) + " Y=" + StringOf(y) + "</Position>";
+            Putln( f=pfile, s=posdata );  
+            DriveOption(tTP,maxtip,tiplist,x,y,tarid,zdispoffset,zmoveoffset,path); 
+            if tTP.hsnap = 1 then begin
+             d = Date();
+             t = Time();
+             DateTimecam=Substring(d,6,10)+Substring(d,0,2)+Substring(d,3,5)+ "_"+Substring(t,0, 2)+Substring(t,3,5)+Substring(t,6,8);
+             pictname = path + "/" + DateTimecam + "_" + tTP.anot + "head.bmp";
+             SetLiveVideo( on=false);  
+             SaveBitmap( filename=pictname ); 
+             SetLiveVideo( on=true);           
+            end;
+            if tTP.adp < 15 then begin //this discriminates from the video microscope commands in DriveOption                     
+             // move Z up for next target group
+             if tTP.zhsubstrate = 0 then PositionAbsoluteZ( z=GetZ( object=tarid)-zdispoffset-zmoveoffset, 12);    
+	             else PositionAbsoluteZ( z=tTP.zhsubstrate-zdispoffset-zmoveoffset, 12);
+            end;
+        end; //next target group
+       end; //sptypstring type absolute coordinates
+
+
+
+       if tTP.sptyp[ca] = 3 then begin //target(s) within a target group
+        //Get target locations     
+        for i=1 to maxtargp do begin // for every target group
+            tarname = targp[i]; 
+
+	     if (tTP.tbr[i] < 1 and tTP.tbc[i] < 1) then begin
+             tr=GetRows( object=GetObjId( tarname));
+             tc=GetColumns( object=GetObjId( tarname));
+             for r=1 to tr do begin
+             for c=1 to tc do begin
+                tarid = GetTargetId( target_group_id=GetObjId( name=tarname), row=r, column=c); //Here ST deals with only one target per target group
+                x=GetX( object=tarid, column=0 );
+                y=GetY( object=tarid, row=0 ) + GetObjValue( object=tarid, valueIndex=2);            
+                //Save position data
+                posdata = "<Position targetgp=" + tarname + " X=" + StringOf(x) + " Y=" + StringOf(y) + "</Position>";
+                Putln( f=pfile, s=posdata );  
+                DriveOption(tTP,maxtip,tiplist,x,y,tarid,zdispoffset,zmoveoffset,path);    
+                if tTP.hsnap = 1 then begin
+                 d = Date();
+                 t = Time();
+                 DateTimecam=Substring(d,6,10)+Substring(d,0,2)+Substring(d,3,5)+ "_"+Substring(t,0, 2)+Substring(t,3,5)+Substring(t,6,8);
+                 pictname = path + "/" + DateTimecam + "_" + tTP.anot + "head.bmp";
+                 SetLiveVideo( on=false);  
+                 SaveBitmap( filename=pictname ); 
+                 SetLiveVideo( on=true);                      
+                end; 
+                if tTP.adp < 15 then begin //this discriminates from the video microscope commands in DriveOption                      
+                 // move Z up for next target group
+                 	if tTP.zhsubstrate = 0 then PositionAbsoluteZ( z=GetZ( object=tarid)-zdispoffset-zmoveoffset, 12);    
+	                 	else PositionAbsoluteZ( z=tTP.zhsubstrate-zdispoffset-zmoveoffset,12);
+                end;
+             end; //tr loop
+             end; //tc loop   
+	        end; //end if StringLength condition
+
+    	    else begin
+	        if (tTP.tbc[i] >= tTP.tec[i]) then begin 
+ 	         for r=Int(tTP.tbr[i]) to Int(tTP.ter[i]) do begin
+  	         for c=Int(tTP.tec[i]) to Int(tTP.tbc[i]) do begin
+	            mc = Int(tTP.tbc[i])-(tc-1);
+		    if (tTP.tbc[i] = tTP.tec[i]) then mc = Int(tTP.tbc[i]);
+                    tarid = GetTargetId( target_group_id=GetObjId( name=tarname), row=r, column=mc); //Here ST deals with only one target per target group
+                    x=GetX( object=tarid, column=0 );
+                    y=GetY( object=tarid, row=0 ) + GetObjValue( object=tarid, valueIndex=2);            
+                    //Save position data
+                    posdata = "<Position targetgp=" + tarname + " X=" + StringOf(x) + " Y=" + StringOf(y) + "</Position>";
+                Putln( f=pfile, s=posdata );  
+                DriveOption(tTP,maxtip,tiplist,x,y,tarid,zdispoffset,zmoveoffset,path);
+                if tTP.hsnap = 1 then begin
+                 d = Date();
+                 t = Time();
+                 DateTimecam=Substring(d,6,10)+Substring(d,0,2)+Substring(d,3,5)+ "_"+Substring(t,0, 2)+Substring(t,3,5)+Substring(t,6,8);
+                 pictname = path + "/" + DateTimecam + "_" + tTP.anot + "head.bmp";
+                 SetLiveVideo( on=false);  
+                 SaveBitmap( filename=pictname ); 
+                 SetLiveVideo( on=true);             
+                end; 
+                if tTP.adp < 15 then begin //this discriminates from the video microscope commands in DriveOption                      
+                 // move Z up for next target group
+                 	if tTP.zhsubstrate = 0 then PositionAbsoluteZ( z=GetZ( object=tarid)-zdispoffset-zmoveoffset, 12);    
+	                 	else PositionAbsoluteZ( z=tTP.zhsubstrate-zdispoffset-zmoveoffset, 12);
+                end;
+              end; //r loop
+              end; //c loop   
+	        end; //if tTP.tbc[i] > tTP.tec then begin 
+
+	        if tTP.tbc[i] < tTP.tec[i] then begin 
+ 	         for r=Int(tTP.tbr[i]) to Int(tTP.ter[i]) do begin
+  	         for c=Int(tTP.tbc[i]) to Int(tTP.tec[i]) do begin
+               tarid = GetTargetId( target_group_id=GetObjId( name=tarname), row=r, column=c); //Here ST deals with only one target per target group
+               x=GetX( object=tarid, column=0 );
+               y=GetY( object=tarid, row=0 ) + GetObjValue( object=tarid, valueIndex=2);            
+               //Save position data
+               posdata = "<Position targetgp=" + tarname + " X=" + StringOf(x) + " Y=" + StringOf(y) + "</Position>";
+               Putln( f=pfile, s=posdata );  
+               DriveOption(tTP,maxtip,tiplist,x,y,tarid,zdispoffset,zmoveoffset,path);
+               if tTP.hsnap = 1 then begin
+                 d = Date();
+                 t = Time();
+                 DateTimecam=Substring(d,6,10)+Substring(d,0,2)+Substring(d,3,5)+ "_"+Substring(t,0, 2)+Substring(t,3,5)+Substring(t,6,8);
+                 pictname = path + "/" + DateTimecam + "_" + tTP.anot + "head.bmp";
+                 SetLiveVideo( on=false);  
+                 SaveBitmap( filename=pictname ); 
+                 SetLiveVideo( on=true);             
+               end; 
+               if tTP.adp < 15 then begin //this discriminates from the video microscope commands in DriveOption                        
+                // move Z up for next target group
+                	if tTP.zhsubstrate = 0 then PositionAbsoluteZ( z=GetZ( object=tarid)-zdispoffset-zmoveoffset, 12);    
+	                	else PositionAbsoluteZ( z=tTP.zhsubstrate-zdispoffset-zmoveoffset, 12);
+               end;
+              end; //r loop
+              end; //c loop   
+	         end; //if tTP.tbc[i] < tTP.tec then begin 
+	        end; //Ends the loop where you select targets within a group
+        end; //next target group
+       end; //sptypstring type absolute coordinates
+
+
+       //This is for spotting on points
+       if tTP.sptyp[ca] = 4 then begin //target(s) within a target group
+        //Get target locations     
+        for i=1 to maxtargp do begin // for every target group
+            tarname = targp[i]; 
+
+            if (tTP.tbr[i] < 1 and tTP.tbc[i] < 1) then begin
+             tr=GetRows( object=GetObjId( tarname));
+             tc=GetColumns( object=GetObjId( tarname));
+             for r=1 to tr do begin
+             for c=1 to tc do begin
+              tarid = GetTargetId( target_group_id=GetObjId( name=tarname), row=r, column=c); //Here ST deals with only one target per target group
+
+              for pti=1 to CommaCounter(tTP.ptindexstring) do begin 
+
+                 position=GetPoint( object=tarid, index=Int(tTP.ptindex[pti]));
+                 x=position.x;
+                 y=position.y;
+                               
+                 DriveOption(tTP,maxtip,tiplist,x,y,tarid,zdispoffset,zmoveoffset,path);  
+                 if tTP.hsnap = 1 then begin
+                  d = Date();
+                  t = Time();
+                  DateTimecam=Substring(d,6,10)+Substring(d,0,2)+Substring(d,3,5)+ "_"+Substring(t,0, 2)+Substring(t,3,5)+Substring(t,6,8);
+                  pictname = path + "/" + DateTimecam + "_" + tTP.anot + "head.bmp";
+                  SetLiveVideo( on=false);  
+                  SaveBitmap( filename=pictname ); 
+                  SetLiveVideo( on=true);             
+                 end; 
+
+                 if tTP.adp < 15 then begin //this discriminates from the video microscope commands in DriveOption                     
+                  // move Z up for next target group
+                  if tTP.zhsubstrate = 0 then PositionAbsoluteZ( z=GetZ( object=tarid)-zdispoffset-zmoveoffset, 12);    
+                  else PositionAbsoluteZ( z=tTP.zhsubstrate-zdispoffset-zmoveoffset, 12);
+                 end;
+              end; //pti point index loop
+             end; //tr loop
+             end; //tc loop   
+            end; //end if StringLength condition
+
+            else begin
+            if (tTP.tbc[i] >= tTP.tec[i]) then begin 
+             for r=Int(tTP.tbr[i]) to Int(tTP.ter[i]) do begin
+             for c=Int(tTP.tec[i]) to Int(tTP.tbc[i]) do begin
+                mc = Int(tTP.tbc[i])-(tc-1);
+		if (tTP.tbc[i] = tTP.tec[i]) then mc = Int(tTP.tbc[i]);
+                tarid = GetTargetId( target_group_id=GetObjId( name=tarname), row=r, column=mc); //Here ST deals with only one target per target group
+                for pti=1 to CommaCounter(tTP.ptindexstring) do begin 
+
+                 position=GetPoint( object=tarid, index=Int(tTP.ptindex[pti]));
+                 x=position.x;
+                 y=position.y;
+            
+                 DriveOption(tTP,maxtip,tiplist,x,y,tarid,zdispoffset,zmoveoffset,path);
+                 if tTP.hsnap = 1 then begin
+                  d = Date();
+                  t = Time();
+                  DateTimecam=Substring(d,6,10)+Substring(d,0,2)+Substring(d,3,5)+ "_"+Substring(t,0, 2)+Substring(t,3,5)+Substring(t,6,8);
+                  pictname = path + "/" + DateTimecam + "_" + tTP.anot + "head.bmp";
+                  SetLiveVideo( on=false);  
+                  SaveBitmap( filename=pictname ); 
+                  SetLiveVideo( on=true);            
+                 end;
+                if tTP.adp < 15 then begin //this discriminates from the video microscope commands in DriveOption                                         
+                 // move Z up for next target group
+                 if tTP.zhsubstrate = 0 then PositionAbsoluteZ( z=GetZ( object=tarid)-zdispoffset-zmoveoffset, 12);    
+                 else PositionAbsoluteZ( z=tTP.zhsubstrate-zdispoffset-zmoveoffset, 12);
+                end;
+               end; //pti point index loop
+              end; //r loop
+              end; //c loop   
+            end; //if tTP.tbc[i] > tTP.tec then begin 
+
+            if tTP.tbc[i] < tTP.tec[i] then begin 
+             for r=Int(tTP.tbr[i]) to Int(tTP.ter[i]) do begin
+             for c=Int(tTP.tbc[i]) to Int(tTP.tec[i]) do begin
+               tarid = GetTargetId( target_group_id=GetObjId( name=tarname), row=r, column=c); //Here ST deals with only one target per target group
+               for pti=1 to CommaCounter(tTP.ptindexstring) do begin 
+               
+                position=GetPoint( object=tarid, index=Int(tTP.ptindex[pti]));
+                x=position.x;
+                y=position.y;
+            
+                DriveOption(tTP,maxtip,tiplist,x,y,tarid,zdispoffset,zmoveoffset,path);
+                if tTP.hsnap = 1 then begin
+                  d = Date();
+                  t = Time();
+                  DateTimecam=Substring(d,6,10)+Substring(d,0,2)+Substring(d,3,5)+ "_"+Substring(t,0, 2)+Substring(t,3,5)+Substring(t,6,8);
+                  pictname = path + "/" + DateTimecam + "_" + tTP.anot + "head.bmp";
+                  SetLiveVideo( on=false);  
+                  SaveBitmap( filename=pictname ); 
+                  SetLiveVideo( on=true);            
+                end; 
+                if tTP.adp < 15 then begin //this discriminates from the video microscope commands in DriveOption                      
+                 // move Z up for next target group
+                 if tTP.zhsubstrate = 0 then PositionAbsoluteZ( z=GetZ( object=tarid)-zdispoffset-zmoveoffset, 12);    
+                 else PositionAbsoluteZ( z=tTP.zhsubstrate-zdispoffset-zmoveoffset, 12);
+                end;
+               end;//end pti index loop
+              end; //r loop
+              end; //c loop   
+             end; //if tTP.tbc[i] < tTP.tec then begin 
+            end; //Ends the loop where you select targets within a group
+        end; //next target group
+       end; //sptypstring type absolute coordinates
+
+
+
+      if tTP.sptyp[ca] = 5 then begin //dispense on separate individual targets
+        //Get target locations     
+        for i=1 to maxtargp do begin // for every target group
+            //tarid = GetTargetId( target_group_id=GetObjId( name=tarname), row=r, column=c); //Here ST deals with only one target per target group
+	    tarid = Int(tTP.tgr[1]);
+            x=GetX( object=tarid, column=0 );
+            y=GetY( object=tarid, row=0 ) + GetObjValue( object=tarid, valueIndex=2);            
+            //Save position data
+            posdata = "<Position targetgp=" + tarname + " X=" + StringOf(x) + " Y=" + StringOf(y) + "</Position>";
+            Putln( f=pfile, s=posdata );  
+            DriveOption(tTP,maxtip,tiplist,x,y,tarid,zdispoffset,zmoveoffset,path);    
+            if tTP.hsnap = 1 then begin
+              d = Date();
+              t = Time();
+              DateTimecam=Substring(d,6,10)+Substring(d,0,2)+Substring(d,3,5)+ "_"+Substring(t,0, 2)+Substring(t,3,5)+Substring(t,6,8);
+              pictname = path + "/" + DateTimecam + "_" + tTP.anot + "head.bmp";
+              SetLiveVideo( on=false);  
+              SaveBitmap( filename=pictname ); 
+              SetLiveVideo( on=true);             
+            end; 
+        end;//end for loop
+      end; //end if loop
+
+       if tTP.sptyp[ca] = 2 then begin //dispense on array coordinates
+        for i=1 to maxtargp do begin
+            tarname=targp[i];
+            DriveArray(tarname,maxtip,tiplist,tTP,zdispoffset,zmoveoffset,SCD,sr,sc);   
+        end;
+       end; //sptypstring array coordinates
+              
+ 
+     end; //end for loop CommaCounter(tTP.sptypstring)
+    end; //end of tiplist condition
+end;
+
+
+/////////////////MAIN PROGRAM///////////////////
+//Miscellaneous
+var maxtip:integer;
+    tiplist:integer;
+
+//Records
+var tTD:tTipData;
+    tSS:tStrobData;
+
+//Positioning related variables
+var targp:array [1..1000] of string;
+    maxtargp:integer;
+    tarname:string;
+    i,k,gi,tarid:integer;
+    x,y:real;
+    zdispoffset,zmoveoffset:real;
+
+//Log file handling variables
+var d,t,DateTime:string;
+    pfile,cfile,sfile:file;
+    path,imagename,filename,posdata,bpath:string;
+    pointfilename,datadir:string;
+    strobfilename,trackfilename,corfilename:string;
+    len:integer;
+    ij,il:integer;
+    posTxt:integer;
+    z,snamestr,sName,bName:string;
+    pos:array[1..1000] of integer;
+
+//........Default variables //.........................
+//Aspiration variables    
+var review:boolean;
+    aspfl,aspvol,delaytime,drypadtime,bfdrypadtime:real;
+    retfl,retvol,retalvol,retalfl:real;
+    retflag:integer;
+    datastring:string;
+    val:integer;
+    piezo:boolean;
+    piezovolt,piezofreq,piezopulse:integer;
+    sr,sc:integer;
+    allret,selret,bfspot,afspot:boolean;
+    
+//Stroboscope variables
+var delay:real;
+    btdelay:real;
+    cv:real;
+    SCD:array[1..16] of boolean;
+    chkcount:integer;
+
+//Washing parameter variables    
+var washtime,drytime,dwelltime,extrawashvol,extrawashfl:real;
+    extrawashwell:integer;
+    extrawashwellstr:string;
+    extrapiezo:boolean;
+    
+//ADP array variables
+var ad:integer;
+    batch_size:integer;
+    continue:boolean;
+    ptFile:file;
+    arraydetails:boolean; 
+    
+//Transferlist variables
+var line:string;
+    translinecounter:integer;
+    tTP:tTransParse;
+    tlar:array[1..100000] of string;
+    tli,ti:integer;
+
+//ShakerPlate variables
+var shakeroutput:string; 
+
+//Tarstr for WSP
+var tarwsp:string;
+
+//This is for the python path parsing script
+var drnamer:string;
+    pyFile:file;
+ 
+//For head camera <A>88</A>
+var pictname, DateTimecam:string; 
+ 
+// Start of program-------------------------------   
+begin
+
+
+  //Set Head cam light-----------------------------------------------------
+  SetHeadCamLight( lamp=1, state=false);
+
+  //Set State-----------------------------------------------------
+  //SetState( object=MTP_Sys );
+  for i=1 to 100 do begin 
+    if GetKind( object=i)=2 then SetState( object=i );
+  end;
+
+   Message("Transfer list", "Please select your transferlist");
+  //Array & Batch dispensing variables---------------------------------
+    ptFile=OpenR( filename="", useDialog=true);
+    pointfilename=FileName( f=ptFile);
+    translinecounter = 0;      
+
+  //python caller here
+  tTP= pythonpath(pointfilename);
+    
+
+
+    path = '';
+    for i=1 to tTP.pynum do begin
+     path = path + tTP.pypathar[i]+'/'; 
+    end;
+    Writeln("path ", path);
+    bpath = path;
+    bName = tTP.pyfile;
+
+
+/*
+ //Going to find the path of the transferlist file
+    posTxt=FindString( sToSearch=pointfilename, sToFind=".txt");    
+    sName=Substring(s=pointfilename, iBeg=0, iEnd=posTxt);
+    len = StringLength(sName);
+    ij = 0;
+    for il=0 to len do begin
+      z=Substring(sName,il,il+1);
+      if z="/" then begin
+       	ij = ij + 1;
+       	pos[ij] = il;
+       	snamestr = snamestr + z;
+      end;
+    end;
+    path = Substring(s=sName, iBeg=0, iEnd=pos[StringLength(snamestr)]);
+*/
+  
+
+//    bName = Substring(s=pointfilename, iBeg=pos[ij]+1, FindString(sToSearch=pointfilename, sToFind=".txt"));
+
+Writeln("bName ", bName);
+
+//    bpath = Substring(s=path, iBeg=FindString(sToSearch=path, sToFind="NpC16 V2.15.46/")+StringLength("NpC16 V2.15.46/"), -1);
+
+Writeln("bpath ", bpath);
+
+    d = Date();
+    t = Time();
+    DateTime=Substring(d,6,10)+Substring(d,0,2)+Substring(d,3,5)+ "_"+Substring(t,0, 2)+Substring(t,3,5)+Substring(t,6,8);
+    filename= bName+"_"+DateTime+".txt";
+    trackfilename= bName+"_track"+DateTime+".txt";
+    strobfilename= bName+"_strob"+DateTime+".txt";
+    corfilename= "cor"+DateTime+".txt";
+    datadir = bpath + bName + DateTime + "_data";
+
+    Window("Files", "Path: ", path,
+    "Transferlist filename: " + pointfilename + "\nTrack filename: ", trackfilename,
+    "Strob data filename: ", strobfilename,
+    "Correction filnename: ", corfilename,
+    "Data saved at: ", datadir);
+    //tsting
+    Writeln(datadir);
+    MakeDir( dirName=datadir);
+
+ //Now it reads all lines of transferlist file and creates array of transfer list lines 'tlar'---------------------------   
+    tli = 0;
+    while FileState(ptFile) > 0 do begin
+     line = Getln( f=ptFile); 
+     tli = tli + 1; 
+     tlar[tli] = line;
+    end;
+    if FileState(ptFile) > -1 then Close(ptFile);
+
+  // ShakerPlateOff-----------------------------------------------------
+  //shakeroutput=ShakerPlate("B");
+       
+    SetVideoSource( source=1); // head camera
+    SetLiveVideo( on=true);
+
+  //Setting the maxtip//
+    tTD=TipData();  
+  // define tip data
+    selectTipParameters(tTD,pfile);                  
+
+ //Here parses the first line of the default headers - aspiration values
+    tTP = ParserXML(tlar[1]);  
+    aspfl = tTP.daf;
+    aspvol = tTP.dav;
+    delaytime = tTP.dadt;
+    drypadtime = tTP.daddt;
+    bfdrypadtime=tTP.dadbdt;
+
+ //Here parses the second line of the default headers - aspiration values cont...
+    tTP = ParserXML(tlar[2]);  
+    piezo=tTP.dapz;
+    piezovolt=tTP.dapzv;
+    piezopulse=tTP.dapzp;
+    piezofreq=tTP.dapzf; 
+
+ //Here parses the third line of the default headers - stroboscope settings
+    tTP = ParserXML(tlar[3]);  
+    delay = tTP.dsdt; 
+    chkcount=tTP.dschc;
+    btdelay = tTP.dsbtdt;
+    cv = tTP.dscv;
+
+  //Z move positions
+    tTP = ParserXML(tlar[4]);  
+    zdispoffset=tTP.dzoff;
+    zmoveoffset=tTP.dzmoveoff;
+
+ //Here parses the fourth line of the default headers - wash settings
+    tTP = ParserXML(tlar[5]);  
+    washtime=tTP.dwdt;
+    drytime=tTP.ddt;
+    extrawashvol=tTP.dewv;
+    extrawashfl=tTP.dewf;
+    extrapiezo=tTP.depz;
+    extrawashwellstr=tTP.deww;
+    extrawashwell=GetObjId( name=extrawashwellstr);
+
+ //Default drop
+    tTD.drop[1] = 1;           
+
+    review=Confirmation("Default Settings", "Do you want to review your default values?");
+
+    if review=true then begin
+       Window("Aspiration", 
+        "Aspiration Volume (ul): ", aspvol,
+        "Aspiration FlowRate (uL/s): ", aspfl,
+        "Return sample in source plate after spotting: ", allret,
+        "Return sample in source plate if failed strob test: ", selret,
+        "Delay Time (s): " , delaytime,
+        "Before Aspiration Drypad Time (s): ", bfdrypadtime,
+        "After Aspiration Drypad Time (s): " , drypadtime,
+        "Piezo On: ", piezo,
+        "Piezo Voltage (V): ", piezovolt,
+        "Piezo Pulse Width (us): ", piezopulse,
+        "Piezo Frequency (Hz): ", piezofreq);
+
+    if allret = true then begin
+      retvol=aspvol;
+      retfl=aspfl;
+      retflag = 0;
+      Window("Samples return post spot", "This returns your samples into the source plate after spotting\nPlease enter the dispensing volumes and flow rates:\nDispense volume: ", retvol, "Flow rate: ", retfl);
+    end;
+
+    if selret = true then begin
+      retalvol=aspvol;
+      retalfl=aspfl;
+      Window("Samples return failed strob", "This returns your samples into the source plate if they fail the strob test\nPlease enter the dispensing volumes, flow rates and when you want to return the sample:\nDispense volume: ", retalvol, "Flow rate: ", retalfl, "Return sample before spotting: ", bfspot, "Return sample after spotting: ", afspot);
+    end;
+
+       Window("Wash Conditions", "Wash Time: ", washtime,
+        "Drytime (s): ", drytime, 
+        "ExtraWash Well: ", extrawashwellstr,
+        "ExtraWash Volume (uL): ", extrawashvol,
+        "ExtraWash FlowRate (uL/s): ", extrawashfl,
+        "ExtraWash Piezo: ", extrapiezo);
+
+       Window("Strob Details", "Delay Before Check: ", delay,
+        "Checks: ", chkcount,
+        "Delay Between Check (s): ", btdelay,
+        "%CV Tolerance Across Checks: ", cv);
+
+       Window("Z Height", "Z Height From Target: ", zdispoffset,
+        "Z Height to Traverse Targets: ", zmoveoffset);
+
+    end;
+
+
+    pfile=OpenRW( filename=datadir + "/" + trackfilename, , append=true);
+    cfile=OpenRW( filename=datadir + "/" + corfilename, , append=true);
+    datastring = "<DAF>"+aspfl+"</DAF>";
+    datastring = datastring + "<DAV>"+aspvol+"</DAV>";
+    datastring = datastring + "<DADT>"+delaytime+"</DADT>";
+    datastring = datastring + "<DADDT>"+drypadtime+"</DADDT>";
+    datastring = datastring + "<DADBDT>"+bfdrypadtime+"</DADBDT>";
+    Putln( f=pfile, s=datastring ); 
+    Putln( f=cfile, s=datastring ); 
+    if FileState(pfile) > -1 then Close(pfile);
+    if FileState(cfile) > -1 then Close(cfile);
+
+    pfile=OpenRW( filename=datadir + "/" + trackfilename, , append=true);
+    cfile=OpenRW( filename=datadir + "/" + corfilename, , append=true);
+    datastring = "<DAPZ>"+piezo+"</DAPZ>";
+    datastring = datastring + "<DAPZV>"+piezovolt+"</DAPZV>";
+    datastring = datastring + "<DAPZP>"+piezopulse+"</DAPZP>";
+    datastring = datastring + "<DAPZF>"+piezofreq+"</DAPZF>";
+    Putln( f=pfile, s=datastring ); 
+    Putln( f=cfile, s=datastring ); 
+    if FileState(pfile) > -1 then Close(pfile);
+    if FileState(cfile) > -1 then Close(cfile);
+
+    pfile=OpenRW( filename=datadir + "/" + trackfilename, , append=true);
+    cfile=OpenRW( filename=datadir + "/" + corfilename, , append=true);
+    datastring = "<DSDT>"+delay+"</DSDT>";
+    datastring = datastring + "<DSCHC>"+chkcount+"</DSCHC>";
+    datastring = datastring + "<DSBTDT>"+btdelay+"</DSBTDT>";
+    datastring = datastring + "<DSCV>"+cv+"</DSCV>";
+    Putln( f=pfile, s=datastring ); 
+    Putln( f=cfile, s=datastring ); 
+    if FileState(pfile) > -1 then Close(pfile);
+    if FileState(cfile) > -1 then Close(cfile);
+
+    pfile=OpenRW( filename=datadir + "/" + trackfilename, , append=true);
+    cfile=OpenRW( filename=datadir + "/" + corfilename, , append=true);
+    datastring = "<DZOFF>"+zdispoffset+"</DZOFF>";
+    datastring = datastring + "<DZMOFF>"+zmoveoffset+"</DZMOFF>";
+    Putln( f=pfile, s=datastring ); 
+    Putln( f=cfile, s=datastring ); 
+    if FileState(pfile) > -1 then Close(pfile);
+    if FileState(cfile) > -1 then Close(cfile);
+ 
+    pfile=OpenRW( filename=datadir + "/" + trackfilename, , append=true);
+    cfile=OpenRW( filename=datadir + "/" + corfilename, , append=true);
+    datastring = "<DWDT>"+washtime+"</DWDT>";
+    datastring = datastring + "<DDT>"+drytime+"</DDT>";
+    datastring = datastring + "<DEWV>"+extrawashvol+"</DEWV>";
+    datastring = datastring + "<DEWF>"+extrawashfl+"</DEWF>";
+    datastring = datastring + "<DEPZ>"+extrapiezo+"</DEPZ>";
+    datastring = datastring + "<DEWW>"+extrawashwellstr+"</DEWW>";
+    Putln( f=pfile, s=datastring ); 
+    Putln( f=cfile, s=datastring ); 
+    if FileState(pfile) > -1 then Close(pfile);
+    if FileState(cfile) > -1 then Close(cfile);
+
+
+///////////////////////BEGIN TRACKFILE ELEMENTS/////////////////////////
+
+    sfile=OpenRW( filename=datadir + "/" + strobfilename, , append=true);
+    pfile=OpenRW( filename=datadir + "/" + trackfilename, , append=true);
+    for i=1 to tTD.maxtip do begin
+    	datastring = "<SRL=" + i + ">";
+	datastring = datastring + tTD.serial[i] + "</SRL>";
+    	datastring = datastring + "<V>";
+	datastring = datastring + StringOf(tTD.volt[i]:0:3) + "</V>";
+    	datastring = datastring + "<L>";
+	datastring = datastring + StringOf(tTD.pulse[i]:0:3) + "</L>";
+    	datastring = datastring + "<F>";
+	datastring = datastring + StringOf(tTD.frequency[i]:0:3) + "</F>";
+    	datastring = datastring + "<TPS>";
+	datastring = datastring + StringOf(tTD.pos[i]) + "</TPS>";
+    	Putln( f=sfile, s=datastring ); 
+    	Putln( f=pfile, s=datastring ); 
+    end;
+   if FileState(sfile) > -1 then Close(sfile);
+   if FileState(pfile) > -1 then Close(pfile);
+	
+   //WorkPlateObjects(trackfilename,datadir);
+
+
+///////////////////////END TRACKFILE ELEMENTS/////////////////////////
+
+
+ //This is before the transferlist is read. It enables the tips to be good so that you can dispense (tTP.asp = 4) without have to strobcheck
+  //Initially all tips are good
+    tiplist = 0;
+    for i=1 to tTD.maxtip do begin
+      tTD.tpl[i] = true;
+      SCD[i] = true;
+      tiplist = tiplist + tipCode(i); //these are before strobcheck variables
+    end;
+   
+            
+ // This loops through the transferlist file---------------------------   
+ for ti=1 to tli do begin //line counter for array of transfer lists line
+  if ti > 5 then begin
+    line = tlar[ti]; 
+    pfile=OpenRW( filename=datadir + "/" + trackfilename, , append=true);
+    Putln( f=pfile, s=line ); 
+    if FileState(pfile) > -1 then Close(pfile);
+    if FindString(sToSearch=line, sToFind="<") > -1 then begin
+      tTP = ParserXML(line);   
+      //This allows you to set the zmoveoffset in the tranfer list 
+      if FindString(sToSearch=line, sToFind="<ZT>") > -1 then zmoveoffset = tTP.ztrav;
+      //Initially all tips are good
+      tiplist = 0;
+      for i=1 to tTD.maxtip do begin
+       if tTP.tl[i] == 1 then begin
+          tTD.tpl[i] = true;
+          tiplist = tiplist + tipCode(i); //these are before strobcheck variables
+       end;
+      end;  
+
+     //Sets the tip nozzle parameters ---------------------------------   
+     //I need to delete this since its deprecated
+     tipsettings(tTD,tTD.maxtip,tTP,strobfilename,datadir);                                                                               
+
+// <A>1</A> conditon --Wash,Aspiration and StrobCheck----------------
+     if tTP.asp == 1 then begin //1 = wash, aspirate, strobe check
+
+       //Returning sample after spotting?-----------------------------
+       //retflag makes it so that you do this after the aspirating from the first sample
+
+       PositionAbsoluteZ( z=0 ); 
+       Wash(washtime,0,extrawashvol,extrawashfl,extrapiezo,extrawashwell,dwelltime,tiplist);
+       PipetteDry( dryTime=drytime);
+       PositionAbsoluteZ( z=0 );
+       
+       //Aspirate--------------------------------------------------
+       Aspiration(tTD.maxtip,delay,tTP.sr,tTP.sc,aspfl,aspvol,delaytime,bfdrypadtime,drypadtime,piezo,piezopulse,piezovolt,piezofreq,DateTime,tiplist,datadir+"/",filename,tTP.s);
+       //Sets the retflag 
+       retflag = 1;
+       //Strobocheck--------------------------------------------------
+       Stroboscope( );
+	
+       SCD=StrobCheckDriver(ti,tTD.maxtip,1,tTP.sr,tTP.sc,strobfilename,delay,tTP.batch,btdelay,datadir+"/",tSS,tTD.tpl,tTD,tTP,cv,chkcount);
+       //WellState----------------------------------------------------
+       WellState(tTD.maxtip,tTP.asp,tTP.sr,tTP.sc,SCD,tTP.s);    
+       //Corfile set up-----------------------------------------------
+       corFile(corfilename,datadir,line,tTD.maxtip,SCD,tTP);
+       //Returning sample before spotting?-----------------------------
+       //Setting up the pr and pc
+       sr = tTP.sr;
+       sc = tTP.sc;
+       //Close(cfile);
+     end; //End of tTP.asp = 1 flag
+// End<A>1</A> conditon -----------------------------------------------------
+
+// <A>11</A> conditon --Wash,Aspiration and StrobCheck----------------
+     if tTP.asp == 11 then begin //1 = wash, aspirate, strobe check
+
+       //Returning sample after spotting?-----------------------------
+       //retflag makes it so that you do this after the aspirating from the first sample
+
+       PositionAbsoluteZ( z=0 ); 
+       Wash(washtime,0,extrawashvol,extrawashfl,extrapiezo,extrawashwell,dwelltime,tiplist);
+       PipetteDry( dryTime=drytime);
+       PositionAbsoluteZ( z=0 );
+       
+       //Aspirate--------------------------------------------------
+       AirGapAspiration(tTD.maxtip,delay,tTP.sr,tTP.sc,aspfl,aspvol,delaytime,bfdrypadtime,drypadtime,piezo,piezopulse,piezovolt,piezofreq,DateTime,tiplist,datadir+"/",filename,tTP.s);
+       //Sets the retflag 
+       retflag = 1;
+       //Strobocheck--------------------------------------------------
+       Stroboscope( );
+	
+       SCD=StrobCheckDriver(ti,tTD.maxtip,1,tTP.sr,tTP.sc,strobfilename,delay,tTP.batch,btdelay,datadir+"/",tSS,tTD.tpl,tTD,tTP,cv,chkcount);
+       //WellState----------------------------------------------------
+       WellState(tTD.maxtip,tTP.asp,tTP.sr,tTP.sc,SCD,tTP.s);    
+       //Corfile set up-----------------------------------------------
+       corFile(corfilename,datadir,line,tTD.maxtip,SCD,tTP);
+       //Returning sample before spotting?-----------------------------
+       //Setting up the pr and pc
+       sr = tTP.sr;
+       sc = tTP.sc;
+       //Close(cfile);
+     end; //End of tTP.asp = 1 flag
+// End<A>1</A> conditon -----------------------------------------------------
+
+
+
+     if tTP.asp == 6 then begin //6 = wash, aspirate NO strobe check
+// <A>6</A> conditon ----Wash and Aspiration and NO StrobCheck--------------- 
+        PositionAbsoluteZ( z=0 ); 
+        // Wash-----------------------------------------------------
+        Wash(washtime,0,extrawashvol,extrawashfl,extrapiezo,extrawashwell,dwelltime,tiplist);
+        PipetteDry( dryTime=drytime);
+        //Aspirate--------------------------------------------------
+        Aspiration(tTD.maxtip,delay,tTP.sr,tTP.sc,aspfl,aspvol,delaytime,bfdrypadtime,drypadtime,piezo,piezopulse,piezovolt,piezofreq,DateTime,tiplist,datadir+"/",filename,tTP.s);
+      Stroboscope();
+    end;
+
+
+// <A>2</A> conditon ----Aspiration and StrobCheck---------------------------
+     if tTP.asp == 2 then begin //2 aspirate and strobe check
+       PositionAbsoluteZ( z=0 ); 
+       // ShakerPlateOn-----------------------------------------------------
+       //shakeroutput=ShakerPlate("V3000");
+       //shakeroutput=ShakerPlate("G");
+       
+       // Wait-----------------------------------------------------
+       TimerDelay( t=15 );
+        
+       // ShakerPlateOff-----------------------------------------------------
+       //shakeroutput=ShakerPlate("S");
+       //shakeroutput=ShakerPlate("V60");
+       //shakeroutput=ShakerPlate("F");
+       //shakeroutput=ShakerPlate("Q");
+	/*
+       if shakeroutput != "STOP\r" then
+        begin
+            Message("Shaker Error", "Shaker not at home position: " + shakeroutput);
+        end;
+	*/
+       //Aspirate--------------------------------------------------
+       Aspiration(tTD.maxtip,delay,tTP.sr,tTP.sc,aspfl,aspvol,delaytime,bfdrypadtime,drypadtime,piezo,piezopulse,piezovolt,piezofreq,DateTime,tiplist,datadir+"/",filename,tTP.s);
+       //Strobocheck--------------------------------------------------
+       SCD=StrobCheckDriver(ti,tTD.maxtip,1,sr,sc,strobfilename,delay,tTP.batch,btdelay,datadir + "/",tSS,tTD.tpl,tTD,tTP,cv,chkcount);
+       //WellState----------------------------------------------------
+       //WellState(tTD.maxtip,tTP.asp,sr,sc,SCD,tTP.s);    
+       //Corfile set up-----------------------------------------------
+       corFile(corfilename,datadir,line,tTD.maxtip,SCD,tTP);
+       //Returning sample before spotting?-----------------------------
+       /*
+       if bfspot=true then begin
+         returnSample(maxtip,tTP,SCD,retvol,retfl,false,selret,tTP.sr,tTP.sc);
+       end;
+       */
+     end; //end  "if tTP.asp == 2"                                    
+// End <A>2</A> conditon -----------------------------------------------------
+
+     
+// <A>3</A> conditon ---Just StrobCheck---------------------------------------
+     if tTP.asp == 3 then begin //3 strobe check
+       PositionAbsoluteZ( z=0 ); 
+       //Strobocheck--------------------------------------------------
+       //Added this to figure out strob check RR
+        SCD=StrobCheckDriver(ti,tTD.maxtip,1,sr,sc,strobfilename,delay,tTP.batch,btdelay,datadir + "/",tSS,SCD,tTD,tTP,cv,chkcount);
+        //WellState----------------------------------------------------
+        //WellState(tTD.maxtip,tTP.asp,sr,sc,SCD,tTP.s);    
+       //Corfile set up-----------------------------------------------
+       corFile(corfilename,datadir,line,tTD.maxtip,SCD,tTP);
+     end; //end  "if tTP.asp == 3"                          
+// End <A>3</A> conditon -----------------------------------------------------
+
+
+// <A>5</A> conditon ---Wash and StrobCheck---------------------------------------
+     if tTP.asp == 5 then begin //5  wash and strobe check
+       PositionAbsoluteZ( z=0 ); 
+       Wash(washtime,0,extrawashvol,extrawashfl,extrapiezo,extrawashwell,dwelltime,tiplist);
+       PositionAbsoluteZ( z=0 ); 
+       //Strobocheck--------------------------------------------------
+       SCD=StrobCheckDriver(ti,tTD.maxtip,1,sr,sc,strobfilename,delay,tTP.batch,btdelay,datadir + "/",tSS,tTD.tpl,tTD,tTP,cv,chkcount);
+       //WellState----------------------------------------------------
+       //WellState(tTD.maxtip,tTP.asp,sr,sc,SCD,tTP.s);    
+       //Corfile set up-----------------------------------------------
+       corFile(corfilename,datadir,line,tTD.maxtip,SCD,tTP);
+     end; //end  "if tTP.asp == 3"                                    
+// End <A>5</A> conditon -----------------------------------------------------
+
+
+// <A>4</A> conditon ---Just the Spotting Condition---------------------------
+    if tTP.asp == 4 then begin //spotting
+     // ShakerPlateOn--leaves shaker on while dispensing - can comment it out-------
+     //shakeroutput=ShakerPlate("G");                            
+     // start batches
+     for k = 1 to tTP.batch do begin
+         continue = true;
+         if k > 1 then begin
+//         continue = Confirmation( title="Is next batch ready?", question="Continue? (Yes) or Abort Run (No)");
+           continue = true;
+         end;
+         if continue = true then begin
+          //Here I determine the number of target groups to spot (G tag:array of target groups in transfer list)
+          if StringLength(tTP.tgrstring) > 0 then begin
+            maxtargp = 0;
+            for gi=1 to CommaCounter(tTP.tgrstring) do begin           
+              targp[gi] = GetName( object=Int(tTP.tgr[gi]));
+              maxtargp = maxtargp + 1; //value over written from transfer list
+            end;
+          end; 
+          //Driver---runs for all defined target groups---------------------
+          if tTP.tgr[1] > 0 then begin
+              Driver(tTD,maxtargp,targp,pfile,datadir+"/",DateTime,zdispoffset,tTD.maxtip,zmoveoffset,tTP,SCD,sr,sc,tTP.tippos); 
+            //Corfile set up-----------------------------------------------
+            corFile(corfilename,datadir,line,tTD.maxtip,SCD,tTP);
+          end;
+         end; //end continue=true
+
+        if continue = false then begin
+         tiplist = 0;
+         Message("Stop Run", "Please stop the run and reset the program.");
+        end;
+       end; //end of batches  
+  end; //end of if loop checking for "<" characters 
+
+ //<A>8</A> QuantSpot tool
+ if tTP.asp == 8 then begin //SpotQuant note -- works with WSP target
+  if SCD[1] = true then begin
+   tTD = TipData();
+   tarwsp = 'wspcheck';
+     SpotQuantXY(tTP.sr,tTP.sc,Int(tTP.bbr[1]),Int(tTP.bbc[1]),tTP.xpos[1],tTP.ypos[1],datadir+"/",DateTime,tTP.anot,tTD.volt[1],tTD.pulse[1],ti,tTP.anotdes,tarwsp);
+   //SpotQuant(tTP.sr,tTP.sc,Int(tTP.bbr[1]),Int(tTP.bbc[1]),Int(tTP.cbr[1]),Int(tTP.cbc[1]),datadir+"/",DateTime,tTP.anot,tTD.volt[1],tTD.pulse[1],ti,tTP.anotdes,tarwsp);
+  end;
+ end; //tTP.asp == 8 condition
+
+
+ if tTP.asp == 9 then begin
+    	PositionAbsoluteZ(tTP.z,20);
+ end;
+
+ if tTP.asp == 88 then begin
+    SetVideoSource( source=1);
+    SetLiveVideo( on=false);
+    TimerDelay( t=0.5 );
+    pictname = path + "/" + DateTimecam + "_" + tTP.anot + "head.bmp";
+    SaveBitmap( filename=pictname ); 
+    SetLiveVideo( on=true);
+ end;
+
+
+
+/*
+ if tTP.asp == 10 then begin  
+  if SCD[1] = true then begin
+    PositionAbsoluteZ(0,20);
+    PositionToObject( tip=maxtip, object=water );
+    PositionAbsoluteZ( z=GetZ( object=water),20 );
+    TimerDelay( t=2 );
+    PositionAbsoluteZ( z=0 );
+  end;
+ end;
+*/
+
+ end;// whole robotic conditions
+
+
+
+ else begin
+   cfile=OpenRW( filename=datadir + "/" + corfilename, , append=true);
+   Putln( f=cfile, s=line );
+   if FileState(cfile) > -1 then Close(cfile);
+ end; 
+ end;//if ti > 5 condition
+ end; //end of transferlist loop
+
+
+
+
+  //Wash after the spotting cycle--------------------------------
+    PositionAbsoluteZ( z=0 ); 
+
+   Wash(washtime,drytime,extrawashvol,extrawashfl,extrapiezo,extrawashwell,dwelltime,tiplist); 
+    // ShakerPlateOff-----------------------------------------------------
+    //shakeroutput=ShakerPlate("B");
+   PositionInit();
+    
+    SetVideoSource( source=8);
+
+   cfile=OpenRW( filename=datadir + "/" + trackfilename, , append=true);
+   d = Date();
+   t = Time();
+   line = "Finished: ";
+   line=line+Substring(d,6,10)+Substring(d,0,2)+Substring(d,3,5)+ "_"+Substring(t,0, 2)+Substring(t,3,5)+Substring(t,6,8);
+   Putln( f=cfile, s=line );
+   if FileState(cfile) > -1 then Close(cfile);
+    
+ //DLH Move to center
+ //PositionAbsoluteXY( tip=0, x=408.03, y=128.16, speed=100 );
+ //  PositionAbsoluteXY( tip=0, x=396.57, y=144.28, speed=100 );
+ //  SaveBitmap( "Images/Image_Test_1.bmp",,bBitmapOnly=true);
+end. 
+ 

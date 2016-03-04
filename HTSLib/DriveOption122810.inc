@@ -186,9 +186,8 @@ begin
       SetVideoSource( source=8);  // video microscope  
       CrossHairs(true);
 
-      PositionAbsoluteZ( z=0, 0 );  
-      //PositionAbsoluteXY( tip=-1, x=x+tTP.x_offset[ci], y=y-tTP.y_offset[ci] ); 
-      PositionAbsoluteXY( tip=-1, x=tTP.xpos[ci], y=tTP.ypos[ci], ); 
+      PositionAbsoluteZ( z=0 );  
+      PositionAbsoluteXY( tip=-1, x=x+tTP.x_offset[ci], y=y-tTP.y_offset[ci] ); 
       d = Date();
       t = Time();
       DateTimecam=Substring(d,6,10)+Substring(d,0,2)+Substring(d,3,5)+ "_"+Substring(t,0, 2)+Substring(t,3,5)+Substring(t,6,8);
@@ -200,30 +199,6 @@ begin
      end;
     end;
 
-    if tTP.adp = 41 then begin  //single spot command
-     totalcoords = DriveOptionCommaCounter(tTP.x_offsetstr);
-     for ci=1 to totalcoords do begin    
-      //move to target group dispense position
-      SetVideoSource( source=1);  // head camera 
-      CrossHairs(true);
-
-      PositionAbsoluteZ( z=0, 0 );  
-      //PositionAbsoluteXY( tip=-1, x=x+tTP.x_offset[ci], y=y-tTP.y_offset[ci] ); 
-      PositionAbsoluteXY( tip=1, x=tTP.xpos[ci], y=tTP.ypos[ci], ); 
-      if tTP.zhsubstrate = 0 then PositionAbsoluteZ( z=GetZ( object=tarid)-zdispoffset, 40);    
-      else PositionAbsoluteZ( z=tTP.zhsubstrate-zdispoffset, 40);
-      d = Date();
-      t = Time();
-      DateTimecam=Substring(d,6,10)+Substring(d,0,2)+Substring(d,3,5)+ "_"+Substring(t,0, 2)+Substring(t,3,5)+Substring(t,6,8);
-      pictname = path + "/" + DateTimecam + "_" + tTP.anot + "head.bmp";
-      SetLiveVideo( on=false);   
-      SaveBitmap( filename=pictname, , bBitmapOnly=false );
-      SetLiveVideo( on=true); 
-     end;
-    end;
-
-
-
 //Absolute positioning -- the way to go for video targeting
 
     if tTP.adp = 7 then begin
@@ -234,8 +209,6 @@ begin
       PositionAbsoluteXY( tip=maxtip, x=tTP.xpos[ci], y=tTP.ypos[ci], ); 
       if tTP.zhsubstrate = 0 then PositionAbsoluteZ( z=GetZ( object=tarid)-zdispoffset, 40);    
       else PositionAbsoluteZ( z=tTP.zhsubstrate-zdispoffset, 40);
-      //This is a temporary thing ...
-      TimerDelay(0);
       PipetteDispense( tip_list=tiplist, droplets=Int(tTP.drop[ci]) );    
      end;
     end;
@@ -248,18 +221,7 @@ begin
       SetVideoSource( source=1);  // Head camera 
       PositionAbsoluteXY( tip=maxtip, x=tTP.xpos[ci], y=tTP.ypos[ci], ); 
       if tTP.zhsubstrate = 0 then PositionAbsoluteZ( z=GetZ( object=tarid)-zdispoffset, 20);    
-      else PositionAbsoluteZ( z=tTP.zhsubstrate-zdispoffset, 30);
-      adpArrayDriver( tTP.dx[ci],Int(tTP.numX[ci]),-(tTP.dy[ci]),Int(tTP.numY[ci]),0,tiplist); 
-     end;
-    end;
-
-    if tTP.adp = 88 then begin
-     totalcoords = DriveOptionCommaCounter(tTP.xposstring); 
-     for ci=1 to totalcoords do begin   
-      //move to target group dispense position
-      SetVideoSource( source=1);  // Head camera 
-      PositionAbsoluteXY( tip=maxtip, x=tTP.xpos[ci], y=tTP.ypos[ci], ); 
-      PositionAbsoluteZ( z=tTP.z, 30);
+      else PositionAbsoluteZ( z=tTP.zhsubstrate-zdispoffset, 20);
       adpArrayDriver( tTP.dx[ci],Int(tTP.numX[ci]),-(tTP.dy[ci]),Int(tTP.numY[ci]),0,tiplist); 
      end;
     end;
@@ -273,33 +235,13 @@ begin
      for ci=1 to totalcoords do begin   
       //move to target group dispense position
       SetVideoSource( source=1);  // Head camera 
-      PositionAbsoluteXY( tip=maxtip, x=tTP.xpos[ci], y=tTP.ypos[ci] ); 
+      PositionAbsoluteXY( tip=maxtip, x=tTP.xpos[ci], y=tTP.ypos[ci], ); 
       if tTP.zhsubstrate = 0 then PositionAbsoluteZ( z=GetZ( object=tarid)-zdispoffset, 20);    
       else PositionAbsoluteZ( z=tTP.zhsubstrate-zdispoffset, 20);
       TimerWaitWhileBusy();  
       sofArrayDriver(maxtip,tiplist,1,tTP.xpos[ci],tTP.ypos[ci],tTP.dx[ci],tTP.dy[ci],Int(tTP.numX[ci]),Int(tTP.numY[ci]),Int(tTP.speed[ci]),1); 
      end;
     end;
-
-
-    if tTP.adp = 82 then begin
-     totalcoords = DriveOptionCommaCounter(tTP.xposstring); 
-     for ci=1 to totalcoords do begin   
-      //move to target group dispense position
-      SetVideoSource( source=1);  // Head camera 
-      PositionAbsoluteXY( tip=maxtip, x=tTP.xpos[ci], y=tTP.ypos[ci], ); 
-      if tTP.zhsubstrate = 0 then PositionAbsoluteZ( z=GetZ( object=tarid)-zdispoffset, 20);    
-      else PositionAbsoluteZ( z=tTP.zhsubstrate-zdispoffset, 20);
-      olinex = tTP.xpos[ci];
-      oliney = tTP.ypos[ci];
-      elinex = olinex + tTP.lx[ci];
-      eliney = oliney + tTP.ly[ci];
-      adpLineDriver(maxtip,(olinex),(oliney),(elinex),(eliney),Int(tTP.speed[ci]),tiplist); 
-     end;
-    end;
-
-
-
 
 
 
@@ -315,10 +257,8 @@ begin
       t = Time();
       DateTimecam=Substring(d,6,10)+Substring(d,0,2)+Substring(d,3,5)+ "_"+Substring(t,0, 2)+Substring(t,3,5)+Substring(t,6,8);
       pictname = path + "/" + DateTimecam + "_" + tTP.anot + "vid.bmp";
-      CrossHairs(false);
       SetLiveVideo( on=false);   
       SaveBitmap( filename=pictname, , bBitmapOnly=false );
-      //Exec( command="C:/Program Files/ImageMagick-6.6.9-Q16/mogrify.exe -resize 25% " + pictname);
       CrossHairs(true);
       //SetVideoSource( source=1); 
       //SetLiveVideo( on=true); 

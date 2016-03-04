@@ -12,6 +12,42 @@ type tTipSet=
 
 
 
+function EncoderSanity(x:real,y:real,spotposid:string):void;
+
+var enc_x1, enc_x2, enc_y: real;
+var dx1, dx2, dy: real;
+var errx1, errx2, erry: real;
+var err, maxErr_x1,maxErr_x2,maxErr_y: real;
+
+begin
+
+	enc_x1 = GetSystemValue(infoIndex = 3, partIndex = 11);
+        enc_x2 = GetSystemValue(infoIndex = 3, partIndex = 12);
+        enc_y  = GetSystemValue(infoIndex = 3, partIndex = 13);
+        dx1=x-enc_x1;
+        dx2=x-enc_x2;
+        dy =y-enc_y;
+
+        /* this part sums the errors and this can be calculated later
+        err:=Sqrt( dx1*dx1);
+        errx1 := errx1 + err;
+        if err > maxErr_x1 then maxErr_x1:=err;
+        
+        err:=Sqrt( dx2*dx2);
+        errx2 := errx2 + err;
+        if err > maxErr_x2 then maxErr_x2:=err;
+
+        err:=Sqrt( dy*dy);
+        erry := erry + err;
+        if err > maxErr_y then maxErr_y:=err;
+        */
+
+        Writeln( StringOf( Time(), spotposid, x:9:3, y:9:3, enc_x1:9:3, enc_x2:9:3, enc_y:9:3, ' |', dx1:9:3, dx2:9:3, dy:9:3 ));
+
+
+
+end;
+
 
 
 
@@ -146,9 +182,10 @@ var tarid:integer;
     mtc,mbc,msc:integer;
     zheightmove:real;
     tTS:tTipSet;
-    dx,dy,x,y:real;
+    dx,dy,x,y,posx,posy:real;
     numX,numY:integer;
     totalcoords,ti:integer;
+    spotposid:string;
 begin
 
  tTS=DriveArraySetTips(maxtip,tTP);       
@@ -158,7 +195,7 @@ if tTP.da = 0 then begin
 
 //Message("tTP.tec[1]", tTP.tec[1]);
 //Message("tTP.tbc[1]", tTP.tbc[1]);
-//going right
+
 if (tTP.bec[1] < tTP.bbc[1]) or (tTP.tec[1] < tTP.tbc[1]) then begin
  for br=Int(tTP.bbr[1]) to Int(tTP.ber[1]) do begin
  for tr=Int(tTP.tbr[1]) to Int(tTP.ter[1]) do begin
@@ -180,25 +217,24 @@ if (tTP.bec[1] < tTP.bbc[1]) or (tTP.tec[1] < tTP.tbc[1]) then begin
    PositionToBlock( tip=maxtip, object=tarid, blockRow=br, blockColumn=mbc, spotRow=sr, spotColumn=msc );
    PositionAbsoluteZ( z=GetZ( object=tarid)-zdispoffset, 12);  
    //here we want to call the encoder function 
-   // This is a temporary thing to test
+   spotposid = StringOf(tarid)+"_";
+   spotposid = spotposid +StringOf(br)+"_";
+   spotposid = spotposid +StringOf(mbc)+"_";
+   spotposid = spotposid +StringOf(sr)+"_";
+   spotposid = spotposid +StringOf(msc);
+   posx = GetX( object=tarid, column=msc, blockRow=br, blockCol=mbc);
+   posy = GetY( object=tarid, row=sr, blockRow=br, blockCol=mbc);
+   EncoderSanity(posx,posy,spotposid);
+   //end encoder test
    PipetteDispense( tip_list=tiplist, droplets=0 );
-   //This is per spot
-   //TimerDelay( t=1.2 );
-   //Writeln('python socket.client.py snap'+StringOf(br)+'.'+StringOf(bc)+'.'+StringOf(sr)+'.'+StringOf(sc));
-   //Exec( command='python socket.client.py snap'+StringOf(tr)+'.'+StringOf(tc)+'.'+StringOf(br)+'.'+StringOf(bc)+'.'+StringOf(sr)+'.'+StringOf(sc), wait=1);
    SpotState(tarid,br,mbc,sr,msc,maxtip,SCD,spr,spc,tTP);
- end; //end sc
-   TimerDelay( t=1 );
-   //Exec( command='python socket.client.py snapspots'+StringOf(tr)+'.'+StringOf(tc)+'.'+StringOf(br)+'.'+StringOf(bc)+'.'+StringOf(sr)+'.'+StringOf(sc), wait=1);
- end; //end sr
+ end;
+ end;
  PositionAbsoluteZ( z=GetZ( object=tarid)-zdispoffset-zmoveoffset, 12);
- end; //end bc
-  //TimerDelay( t=1 );
-  Exec( command='python 3spotsocket.client.py rightsnapspots'+StringOf(tr)+'.'+StringOf(tc)+'.'+StringOf(br)+'.'+StringOf(bc)+'.'+StringOf(sr)+'.'+StringOf(sc), wait=1);
-  Writeln('python 3spotsocket.client.py rightsnapspots'+StringOf(br)+'.'+StringOf(bc)+'.'+StringOf(sr)+'.'+StringOf(sc));
-  end; //end br 
- end; //tc 
- end; //tr
+ end;
+ end; 
+ end;
+ end;
 
 end; //End left to right direction 
 
@@ -214,18 +250,22 @@ else begin //Begin right to left - "standard direction"
     PositionToBlock( tip=maxtip, object=tarid, blockRow=br, blockColumn=bc, spotRow=sr, spotColumn=sc );
     PositionAbsoluteZ( z=GetZ( object=tarid)-zdispoffset, 12);   
     //here we want to call the encoder function 
-   // This is a temporary thing to test
+    spotposid = StringOf(tarid)+"_";
+    spotposid = spotposid +StringOf(br)+"_";
+    spotposid = spotposid +StringOf(bc)+"_";
+    spotposid = spotposid +StringOf(sr)+"_";
+    spotposid = spotposid +StringOf(sc);
+    posx = GetX( object=tarid, column=sc, blockRow=br, blockCol=bc);
+    posy = GetY( object=tarid, row=sr, blockRow=br, blockCol=bc);
+    EncoderSanity(posx,posy,spotposid);
+    //end encoder test
+
     PipetteDispense( tip_list=tiplist, droplets=0 );
-   // TimerDelay( t=1.2 );
-   //Exec( command='python socket.client.py snap'+StringOf(tr)+'.'+StringOf(tc)+'.'+StringOf(br)+'.'+StringOf(bc)+'.'+StringOf(sr)+'.'+StringOf(sc), wait=1);
     SpotState(tarid,br,bc,sr,sc,maxtip,SCD,spr,spc,tTP);
-  end; //end sc
-  end; //end sr
+ end;
+ end; 
  PositionAbsoluteZ( z=GetZ( object=tarid)-zdispoffset-zmoveoffset, 12);
- end; //end bc
-  //TimerDelay( t=1 );
-  Exec( command='python 3spotsocket.client.py leftsnapspots'+StringOf(tr)+'.'+StringOf(tc)+'.'+StringOf(br)+'.'+StringOf(bc)+'.'+StringOf(sr)+'.'+StringOf(sc), wait=1);
-  Writeln('python 3spotsocket.client.py leftsnapspots'+StringOf(br)+'.'+StringOf(bc)+'.'+StringOf(sr)+'.'+StringOf(sc));
+ end;
  end; 
  end;
  end;
@@ -326,11 +366,7 @@ if (tTP.bec[1] < tTP.bbc[1]) then begin
    msc = Int(tTP.cbc[ti])-(sc-Int(tTP.cec[ti]));
    PositionToBlock( tip=maxtip, object=tarid, blockRow=br, blockColumn=mbc, spotRow=sr, spotColumn=msc );
    PositionAbsoluteZ( z=GetZ( object=tarid)-zdispoffset, 12);   
-   // This is a temporary thing to test
    PipetteDispense( tip_list=tiplist, droplets=0 );
-   TimerDelay( t=1.2 );
-   //This is per spot
-   Exec( command='python socket.client.py snap'+StringOf(tr)+'.'+StringOf(tc)+'.'+StringOf(br)+'.'+StringOf(bc)+'.'+StringOf(sr)+'.'+StringOf(sc), wait=1);
    SpotState(tarid,br,mbc,sr,msc,maxtip,SCD,spr,spc,tTP);
  end;
  end;
@@ -358,11 +394,7 @@ else begin //Begin right to left - "standard direction"
     tarid = GetTargetId( target_group_id=GetObjId( name=tarname), row=tr, column=tc);
     PositionToBlock( tip=maxtip, object=tarid, blockRow=br, blockColumn=bc, spotRow=sr, spotColumn=sc );
     PositionAbsoluteZ( z=GetZ( object=tarid)-zdispoffset, 12);   
-   // This is a temporary thing to test
-   PipetteDispense( tip_list=tiplist, droplets=0 );
-   //This is per spot
-   TimerDelay( t=1.2 );
-   Exec( command='python socket.client.py snap'+StringOf(tr)+'.'+StringOf(tc)+'.'+StringOf(br)+'.'+StringOf(bc)+'.'+StringOf(sr)+'.'+StringOf(sc), wait=1);
+    PipetteDispense( tip_list=tiplist, droplets=0 );
     SpotState(tarid,br,bc,sr,sc,maxtip,SCD,spr,spc,tTP);
  end;
  end; 
